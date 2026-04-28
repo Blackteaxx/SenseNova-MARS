@@ -21,7 +21,7 @@
   - Inject WSI metadata into `tools_kwargs["wsi_zoom_in_tool"]["create_kwargs"]`.
   - Disable dataset precomputed prompt ids for runtime-generated WSI thumbnails.
 - Reward reuses existing `em_score_mcq`; the data converter normalizes CSV numeric answers to `A/B/C/D`.
-- Keep the one-off MultiPathQA converter outside the SenseNova source tree, for example at `../data/SenseNova-example/scripts/prepare_wsi_tcga_slidebench.py`.
+- Keep the one-off MultiPathQA converter in `scripts/prepare_wsi_tcga_slidebench.py`; it is a training/data-prep script, not part of the `verl` core source tree.
 - Create `config/tool_config/tools_wsi_train.yaml`
   - Tool registry config for `wsi_zoom_in_tool`.
 - Create `config/tool_config/tools_wsi_val.yaml`
@@ -327,8 +327,8 @@ git commit -m "feat(agent): load wsi thumbnails at runtime"
 ## Task 5: MultiPathQA Conversion Script
 
 **Files:**
-- External data script: `../data/SenseNova-example/scripts/prepare_wsi_tcga_slidebench.py`
-- SenseNova source-tree change: `train_wsi_tcga_slidebench.sh` should call that script through `DATA_PREP_SCRIPT`.
+- Data-prep script: `scripts/prepare_wsi_tcga_slidebench.py`
+- `train_wsi_tcga_slidebench.sh` should call that script through `DATA_PREP_SCRIPT`.
 
 - [ ] **Step 1: Write conversion tests**
 
@@ -350,7 +350,7 @@ Test:
 - [ ] **Step 2: Run tests and verify failure**
 
 ```bash
-python3 /Users/hutu/codes/WSI-Nav/data/SenseNova-example/scripts/prepare_wsi_tcga_slidebench.py --help
+python3 scripts/prepare_wsi_tcga_slidebench.py --help
 ```
 
 Expected: FAIL because script is missing.
@@ -360,7 +360,7 @@ Expected: FAIL because script is missing.
 CLI:
 
 ```bash
-python ../data/SenseNova-example/scripts/prepare_wsi_tcga_slidebench.py \
+python scripts/prepare_wsi_tcga_slidebench.py \
   --csv-path /path/MultiPathQA.csv \
   --dicom-root /mnt/.../multipathqa_tcga_dicom \
   --output-root data/wsi_tcga_slidebench \
@@ -416,8 +416,8 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add train_wsi_tcga_slidebench.sh
-git commit -m "chore(data): keep wsi converter outside source tree"
+git add scripts/prepare_wsi_tcga_slidebench.py train_wsi_tcga_slidebench.sh
+git commit -m "chore(data): move wsi converter to scripts"
 ```
 
 ## Task 6: WSI Tool Configs and Training Script
@@ -526,7 +526,7 @@ Expected: PASS.
 If the remote DolphinFS path is not locally mounted, skip locally and run on `cpu-jump` later.
 
 ```bash
-python ../data/SenseNova-example/scripts/prepare_wsi_tcga_slidebench.py \
+python scripts/prepare_wsi_tcga_slidebench.py \
   --csv-path /mnt/dolphinfs/ssd_pool/docker/user/hadoop-nlp-sh02/native_mm/zhangquan/code/hutu/WSI-Nav/gigapixel-goblin/data/multipathqa/MultiPathQA.csv \
   --dicom-root /mnt/dolphinfs/ssd_pool/docker/user/hadoop-nlp-sh02/native_mm/zhangquan/code/hutu/data/multipathqa_tcga_dicom \
   --output-root data/wsi_tcga_slidebench \

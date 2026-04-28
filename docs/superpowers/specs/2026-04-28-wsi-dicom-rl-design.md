@@ -63,7 +63,7 @@ RLHFJSONDatasetV2
 
 关键改动分为四层：
 
-1. 数据转换：在 workspace 的数据目录中放置 MultiPathQA 到 SenseNova JSON/JSONL 的转换脚本，不把 one-off 数据处理脚本放入 SenseNova 源码树。
+1. 数据转换：在 `scripts/prepare_wsi_tcga_slidebench.py` 放置 MultiPathQA 到 SenseNova JSON/JSONL 的数据准备脚本；它是训练辅助脚本，不属于 `verl` 核心库源码。
 2. AgentLoop：复用 `ToolAgentLoop`，只扩展 lazy loading 支持 `multi_modal_data.wsi`。
 3. Tool：新增 WSI DICOM crop tool。
 4. Reward：复用现有 `em_score_mcq`，转换脚本将 CSV 中的 1-based 答案编号规范化为 `A/B/C/D`。
@@ -245,7 +245,7 @@ AgentLoop 看到该标记后忽略 dataset 预计算 prompt ids。
 
 具体实现边界：
 
-1. 数据目录下的转换脚本为 WSI 样本写入 `extra_info.runtime_generated_initial_image = true`。
+1. `scripts/prepare_wsi_tcga_slidebench.py` 为 WSI 样本写入 `extra_info.runtime_generated_initial_image = true`。
 2. `ToolAgentLoop.run()` 看到该标记和 `multi_modal_data.wsi` 后，不使用 kwargs 中的 `input_ids` 作为 `initial_prompt_ids`。
 3. `_handle_pending_state()` 在 WSI 模式下用 runtime 生成的 thumbnail 重新调用 processor，得到新的 prompt ids，并写入 `agent_data.prompt_ids`。
 4. 不需要回写原始 batch 的 `input_ids`、`attention_mask`、`position_ids`。AgentLoop 的 `_postprocess()` 会使用 `AgentLoopOutput.prompt_ids/response_ids/response_mask` 重新组装 rollout batch。
