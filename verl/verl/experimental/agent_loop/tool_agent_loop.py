@@ -28,6 +28,7 @@ from verl.interactions.base import BaseInteraction
 from verl.interactions.utils.interaction_registry import initialize_interactions_from_config
 from verl.tools.schemas import ToolResponse
 from verl.tools.utils.tool_registry import initialize_tools_from_config
+from verl.tools.wsi_dicom_utils import load_wsi_thumbnail
 from verl.utils.profiler import simple_timer
 from verl.utils.rollout_trace import rollout_trace_op
 
@@ -187,6 +188,73 @@ class ToolAgentLoop(AgentLoopBase):
         """Get the appropriate tool schemas based on whether this is a validation run."""
         return self.val_tool_schemas if validate else self.tool_schemas
 
+    def _get_wsi_thumbnail_long_side(self) -> int:
+        config = getattr(self, "config", None)
+        rollout = getattr(getattr(config, "actor_rollout_ref", None), "rollout", None)
+        if rollout is not None:
+            multi_turn = getattr(rollout, "multi_turn", {})
+            if hasattr(multi_turn, "get"):
+                return int(multi_turn.get("wsi_thumbnail_long_side", 1024))
+        return 1024
+
+    def _ensure_wsi_image_marker(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Ensure WSI runtime messages contain exactly one image marker for the initial thumbnail."""
+        for message_idx, message in enumerate(messages):
+            if message.get("role") != "user":
+                continue
+
+            content = message.get("content", "")
+            if isinstance(content, list):
+                if any(item.get("type") == "image" for item in content if isinstance(item, dict)):
+                    return messages
+                updated_messages = copy.deepcopy(messages)
+                updated_content = updated_messages[message_idx].get("content", [])
+                updated_messages[message_idx]["content"] = [{"type": "image"}] + updated_content
+                return updated_messages
+
+            if isinstance(content, str):
+                updated_messages = copy.deepcopy(messages)
+                updated_content = []
+                segments = re.split("(<image>)", content)
+                found_marker = False
+                for segment in segments:
+                    if not segment:
+                        continue
+                    if segment == "<image>":
+                        updated_content.append({"type": "image"})
+                        found_marker = True
+                    else:
+                        updated_content.append({"type": "text", "text": segment})
+                if not found_marker:
+                    updated_content.insert(0, {"type": "image"})
+                updated_messages[message_idx]["content"] = updated_content
+                return updated_messages
+
+        return [{"role": "user", "content": [{"type": "image"}]}] + copy.deepcopy(messages)
+
+    def _prepare_wsi_runtime_inputs(
+        self,
+        messages: list[dict[str, Any]],
+        multi_modal_data: dict[str, Any],
+        tools_kwargs: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], Optional[list[Any]], dict[str, Any], bool]:
+        wsi_data = multi_modal_data.get("wsi") if multi_modal_data else None
+        if not wsi_data:
+            return messages, None, tools_kwargs, True
+
+        wsi_data = dict(wsi_data)
+        image = load_wsi_thumbnail(
+            series_dir=wsi_data.get("series_dir"),
+            dicom_anchor_path=wsi_data.get("dicom_anchor_path"),
+            long_side=self._get_wsi_thumbnail_long_side(),
+        )
+
+        updated_tools_kwargs = copy.deepcopy(tools_kwargs or {})
+        create_kwargs = updated_tools_kwargs.setdefault("wsi_zoom_in_tool", {}).setdefault("create_kwargs", {})
+        create_kwargs.update(wsi_data)
+
+        return self._ensure_wsi_image_marker(messages), [image], updated_tools_kwargs, False
+
     def _inject_image_search_into_prompt(
         self,
         messages: list,
@@ -286,11 +354,19 @@ class ToolAgentLoop(AgentLoopBase):
     @rollout_trace_op
     async def run(self, sampling_params: dict[str, Any], **kwargs) -> AgentLoopOutput:
         messages = list(kwargs["raw_prompt"])
+        tools_kwargs = kwargs.get("tools_kwargs", {})
 
         # Load images from paths (lazy loading to reduce memory in Ray)
         multi_modal_data = kwargs.get("multi_modal_data", {})
+        messages, wsi_image_data, tools_kwargs, use_initial_prompt_ids = self._prepare_wsi_runtime_inputs(
+            messages=messages,
+            multi_modal_data=multi_modal_data,
+            tools_kwargs=tools_kwargs,
+        )
         image_paths = multi_modal_data.get("image_paths", None)
-        if image_paths:
+        if wsi_image_data is not None:
+            image_data = wsi_image_data
+        elif image_paths:
             from verl.utils.dataset.vision_utils import process_image
             image_patch_size = self.config.data.get("image_patch_size", None)
             if image_patch_size is None:
@@ -312,7 +388,6 @@ class ToolAgentLoop(AgentLoopBase):
 
         metrics = {}
         request_id = uuid4().hex
-        tools_kwargs = kwargs.get("tools_kwargs", {})
 
         # Inject image search results directly into user message if enabled
         directly_provide = self.config.actor_rollout_ref.rollout.multi_turn.get("directly_provide_image_search", False)
@@ -330,7 +405,9 @@ class ToolAgentLoop(AgentLoopBase):
         # Dataset's input_ids is left-padded, need to strip padding using attention_mask
         initial_prompt_ids = kwargs.get("input_ids", None)
         attention_mask = kwargs.get("attention_mask", None)
-        if initial_prompt_ids is not None and attention_mask is not None:
+        if not use_initial_prompt_ids:
+            initial_prompt_ids = None
+        elif initial_prompt_ids is not None and attention_mask is not None:
             # Convert tensors to lists if needed
             if hasattr(initial_prompt_ids, "tolist"):
                 initial_prompt_ids = initial_prompt_ids.tolist()

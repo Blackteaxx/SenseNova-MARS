@@ -574,7 +574,7 @@ class RLHFJSONDatasetV2(Dataset):
             raw_prompt = self.processor.apply_chat_template(
                 messages, add_generation_prompt=True, tokenize=False, **apply_kwargs
             )
-            multi_modal_data = {}
+            multi_modal_data = copy.deepcopy(row_dict.pop("multi_modal_data", {}) or {})
 
             images = None
             row_dict_images = row_dict.pop(self.image_key, None)
