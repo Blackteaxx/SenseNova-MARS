@@ -39,7 +39,8 @@ export MIN_PIXELS=${MIN_PIXELS:-65536}
 export SGL_ENABLE_JIT_DEEPGEMM=0
 
 if [ "${PREPARE_DATA:-0}" = "1" ]; then
-    python3 tools/prepare_wsi_tcga_slidebench.py \
+    DATA_PREP_SCRIPT=${DATA_PREP_SCRIPT:-"$(pwd)/../data/SenseNova-example/scripts/prepare_wsi_tcga_slidebench.py"}
+    python3 "$DATA_PREP_SCRIPT" \
         --csv-path "${MULTIPATHQA_CSV:-/mnt/dolphinfs/ssd_pool/docker/user/hadoop-nlp-sh02/native_mm/zhangquan/code/hutu/WSI-Nav/gigapixel-goblin/data/multipathqa/MultiPathQA.csv}" \
         --dicom-root "${DICOM_ROOT:-/mnt/dolphinfs/ssd_pool/docker/user/hadoop-nlp-sh02/native_mm/zhangquan/code/hutu/data/multipathqa_tcga_dicom}" \
         --output-root "${OUTPUT_ROOT:-data/wsi_tcga_slidebench}" \

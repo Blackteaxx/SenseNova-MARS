@@ -20,10 +20,8 @@
   - Add WSI lazy-loading support in `run()`.
   - Inject WSI metadata into `tools_kwargs["wsi_zoom_in_tool"]["create_kwargs"]`.
   - Disable dataset precomputed prompt ids for runtime-generated WSI thumbnails.
-- Modify `verl/verl/utils/reward_score/tool.py`
-  - Add numeric MCQ extraction/scoring and register `em_score_numeric_mcq`.
-- Create `tools/prepare_wsi_tcga_slidebench.py`
-  - Convert MultiPathQA CSV into SenseNova train/val JSONL plus manifest JSON.
+- Reward reuses existing `em_score_mcq`; the data converter normalizes CSV numeric answers to `A/B/C/D`.
+- Keep the one-off MultiPathQA converter outside the SenseNova source tree, for example at `../data/SenseNova-example/scripts/prepare_wsi_tcga_slidebench.py`.
 - Create `config/tool_config/tools_wsi_train.yaml`
   - Tool registry config for `wsi_zoom_in_tool`.
 - Create `config/tool_config/tools_wsi_val.yaml`
@@ -33,81 +31,57 @@
 - Create tests:
   - `verl/tests/tools/test_wsi_dicom_utils.py`
   - `verl/tests/tools/test_wsi_zoom_in_tool.py`
-  - `verl/tests/utils/reward_score/test_numeric_mcq_reward.py`
-  - `verl/tests/tools/test_prepare_wsi_tcga_slidebench.py`
   - `verl/tests/experimental/agent_loop/test_wsi_lazy_loading.py`
 
-## Task 1: Numeric MCQ Reward
+## Task 1: MCQ Reward Convention
 
 **Files:**
-- Modify: `verl/verl/utils/reward_score/tool.py`
-- Test: `verl/tests/utils/reward_score/test_numeric_mcq_reward.py`
+- No SenseNova reward source-code changes required.
+- Data converter normalizes CSV answers before writing JSONL.
 
-- [ ] **Step 1: Write reward tests**
+- [ ] **Step 1: Reuse existing reward**
 
-Create tests covering:
+Use the existing reward function:
 
-```python
-def test_numeric_mcq_reward_extracts_answer_tag_number():
-    assert compute_score_numeric_mcq("<answer>3</answer>", "3") == 1
-    assert compute_score_numeric_mcq("<answer>Option 3</answer>", "3") == 1
-    assert compute_score_numeric_mcq("<answer>3. Gleason pattern</answer>", "3") == 1
-    assert compute_score_numeric_mcq("<answer>The answer is option 3, not 4</answer>", "3") == 1
-    assert compute_score_numeric_mcq("<answer>2</answer>", "3") == 0
-    assert compute_score_numeric_mcq("3", "3") == 0
+```text
+em_score_mcq
 ```
 
-- [ ] **Step 2: Run test and verify failure**
+The converter should write:
 
-Run:
+```json
+"reward_fn": ["em_score_mcq", "format_score"]
+```
+
+- [ ] **Step 2: Normalize answer labels in the data script**
+
+Convert CSV numeric answers to letters:
+
+```text
+1 -> A
+2 -> B
+3 -> C
+4 -> D
+```
+
+- [ ] **Step 3: Render options with letters**
+
+```text
+A. {options[0]}
+B. {options[1]}
+```
+
+- [ ] **Step 4: Verify no numeric reward is registered**
 
 ```bash
-cd /Users/hutu/codes/WSI-Nav/SenseNova-MARS/verl
-uv run pytest tests/utils/reward_score/test_numeric_mcq_reward.py -q
-```
-
-Expected: FAIL because `compute_score_numeric_mcq` is not defined.
-
-- [ ] **Step 3: Implement minimal reward**
-
-Add:
-
-```python
-def extract_solution_for_numeric_mcq(solution_str: str) -> str | None:
-    answer = extract_solution(solution_str)
-    if answer is None:
-        return None
-    match = re.search(r"\d+", answer)
-    return match.group(0) if match else None
-
-def compute_score_numeric_mcq(solution_str, ground_truth, **kwargs):
-    if solution_str is None:
-        solution_str = ""
-    solution_str = solution_str.rsplit("<|im_start|>assistant", 1)[-1]
-    solution_str = re.split(r"</think(?:ing)?>", solution_str)[-1]
-    answer = extract_solution_for_numeric_mcq(solution_str)
-    if answer is None:
-        return 0
-    return 1 if em_check(answer, str(ground_truth)) else 0
-```
-
-Register:
-
-```python
-"em_score_numeric_mcq": compute_score_numeric_mcq,
-```
-
-- [ ] **Step 4: Run reward tests**
-
-Run the same pytest command.
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add verl/verl/utils/reward_score/tool.py verl/tests/utils/reward_score/test_numeric_mcq_reward.py
-git commit -m "feat(reward): add numeric mcq score"
+python3 - <<'PY'
+import importlib.util
+spec = importlib.util.spec_from_file_location("reward_tool", "verl/verl/utils/reward_score/tool.py")
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+assert "em_score_mcq" in mod.compute_score_fns
+assert "em_score_numeric_mcq" not in mod.compute_score_fns
+PY
 ```
 
 ## Task 2: WSI DICOM Helpers
@@ -353,8 +327,8 @@ git commit -m "feat(agent): load wsi thumbnails at runtime"
 ## Task 5: MultiPathQA Conversion Script
 
 **Files:**
-- Create: `tools/prepare_wsi_tcga_slidebench.py`
-- Test: `verl/tests/tools/test_prepare_wsi_tcga_slidebench.py`
+- External data script: `../data/SenseNova-example/scripts/prepare_wsi_tcga_slidebench.py`
+- SenseNova source-tree change: `train_wsi_tcga_slidebench.sh` should call that script through `DATA_PREP_SCRIPT`.
 
 - [ ] **Step 1: Write conversion tests**
 
@@ -376,8 +350,7 @@ Test:
 - [ ] **Step 2: Run tests and verify failure**
 
 ```bash
-cd /Users/hutu/codes/WSI-Nav/SenseNova-MARS/verl
-uv run pytest tests/tools/test_prepare_wsi_tcga_slidebench.py -q
+python3 /Users/hutu/codes/WSI-Nav/data/SenseNova-example/scripts/prepare_wsi_tcga_slidebench.py --help
 ```
 
 Expected: FAIL because script is missing.
@@ -387,12 +360,11 @@ Expected: FAIL because script is missing.
 CLI:
 
 ```bash
-python tools/prepare_wsi_tcga_slidebench.py \
+python ../data/SenseNova-example/scripts/prepare_wsi_tcga_slidebench.py \
   --csv-path /path/MultiPathQA.csv \
   --dicom-root /mnt/.../multipathqa_tcga_dicom \
-  --output-dir data/wsi_tcga_slidebench \
-  --train-size 160 \
-  --val-size 37
+  --output-root data/wsi_tcga_slidebench \
+  --train-size 160
 ```
 
 Outputs:
@@ -406,7 +378,7 @@ train_wsi_tcga_slidebench.json
 The manifest JSON should point to generated JSONL files and set:
 
 ```json
-"reward_fn": ["em_score_numeric_mcq", "format_score"]
+"reward_fn": ["em_score_mcq", "format_score"]
 ```
 
 Every converted row must write:
@@ -427,15 +399,15 @@ Prompt text must follow the spec template exactly:
 Question: {prompt}
 
 Options:
-1. {options[0]}
-2. {options[1]}
+A. {options[0]}
+B. {options[1]}
 ...
 
 You may inspect the whole-slide thumbnail and call tools when needed.
-When ready, return only the final option number in <answer>...</answer>.
+When ready, return only the final option letter in <answer>...</answer>.
 ```
 
-`options` should parse Python-list strings and JSON-list strings; preserve the CSV option order and use 1-based numbering. `answer` should be copied unchanged into `reward_model.ground_truth`.
+`options` should parse Python-list strings and JSON-list strings; preserve the CSV option order and render letter labels. `answer` should be normalized from the CSV 1-based number into `A/B/C/D` before writing `reward_model.ground_truth`.
 
 - [ ] **Step 4: Run converter tests**
 
@@ -444,8 +416,8 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tools/prepare_wsi_tcga_slidebench.py verl/tests/tools/test_prepare_wsi_tcga_slidebench.py
-git commit -m "feat(data): prepare tcga slidebench wsi data"
+git add train_wsi_tcga_slidebench.sh
+git commit -m "chore(data): keep wsi converter outside source tree"
 ```
 
 ## Task 6: WSI Tool Configs and Training Script
@@ -541,10 +513,8 @@ git commit -m "feat(config): add wsi rl training entrypoint"
 ```bash
 cd /Users/hutu/codes/WSI-Nav/SenseNova-MARS/verl
 uv run pytest \
-  tests/utils/reward_score/test_numeric_mcq_reward.py \
   tests/tools/test_wsi_dicom_utils.py \
   tests/tools/test_wsi_zoom_in_tool.py \
-  tests/tools/test_prepare_wsi_tcga_slidebench.py \
   tests/experimental/agent_loop/test_wsi_lazy_loading.py \
   -q
 ```
@@ -556,12 +526,11 @@ Expected: PASS.
 If the remote DolphinFS path is not locally mounted, skip locally and run on `cpu-jump` later.
 
 ```bash
-python tools/prepare_wsi_tcga_slidebench.py \
+python ../data/SenseNova-example/scripts/prepare_wsi_tcga_slidebench.py \
   --csv-path /mnt/dolphinfs/ssd_pool/docker/user/hadoop-nlp-sh02/native_mm/zhangquan/code/hutu/WSI-Nav/gigapixel-goblin/data/multipathqa/MultiPathQA.csv \
   --dicom-root /mnt/dolphinfs/ssd_pool/docker/user/hadoop-nlp-sh02/native_mm/zhangquan/code/hutu/data/multipathqa_tcga_dicom \
-  --output-dir data/wsi_tcga_slidebench \
-  --train-size 160 \
-  --val-size 37
+  --output-root data/wsi_tcga_slidebench \
+  --train-size 160
 ```
 
 Expected: 160 train rows, 37 val rows, manifest written.
