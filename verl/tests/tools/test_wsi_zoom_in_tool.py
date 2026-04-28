@@ -28,14 +28,27 @@ def make_schema() -> OpenAIFunctionToolSchema:
             "type": "function",
             "function": {
                 "name": "wsi_zoom_in_tool",
-                "description": "Zoom into a WSI DICOM series.",
+                "description": (
+                    "Zoom into a region of the current WSI view using the shared "
+                    "global-relative 0..1000 coordinate system."
+                ),
                 "parameters": {
                     "type": "object",
+                    "additionalProperties": False,
                     "properties": {
-                        "bbox_2d": {"type": "array"},
-                        "label": {"type": "string"},
+                        "bbox_2d": {
+                            "type": "array",
+                            "items": {"type": "number"},
+                            "minItems": 4,
+                            "maxItems": 4,
+                            "description": "[x1, y1, x2, y2] crop box in 0..1000 space.",
+                        },
+                        "label": {
+                            "type": "string",
+                            "description": "Short label for the crop request.",
+                        },
                     },
-                    "required": ["bbox_2d"],
+                    "required": ["bbox_2d", "label"],
                 },
             },
         }

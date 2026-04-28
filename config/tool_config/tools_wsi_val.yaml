@@ -10,9 +10,10 @@ tools:
       type: function
       function:
         name: wsi_zoom_in_tool
-        description: "在病理全切片图像中放大查看一个局部区域。坐标使用整张缩略图上的全局相对坐标，范围为 0 到 1000。"
+        description: "Zoom into a region of the current WSI view using the shared global-relative 0..1000 coordinate system."
         parameters:
           type: object
+          additionalProperties: false
           properties:
             bbox_2d:
               type: array
@@ -20,9 +21,10 @@ tools:
                 type: number
               minItems: 4
               maxItems: 4
-              description: "需要放大的区域框，格式为 [x1, y1, x2, y2]。左上角是 (x1, y1)，右下角是 (x2, y2)，所有数值都在 0 到 1000 之间。"
+              description: "[x1, y1, x2, y2] crop box in 0..1000 space."
             label:
               type: string
-              description: "用简短中文描述你想查看的区域或病理结构，例如 肿瘤边缘、腺体区域、坏死区域。"
+              description: "Short label for the crop request."
           required:
             - bbox_2d
+            - label
