@@ -50,7 +50,7 @@ fi
 
 if [ "$START_RAY" = "1" ]; then
     ray stop --force 2>/dev/null || true
-    ray start --head --port="${MASTER_PORT:-6379}" --dashboard-host=0.0.0.0 --dashboard-port="${DASHBOARD_PORT:-8265}" --disable-usage-stats
+    ray start --head --port="${MASTER_PORT:-6379}" --dashboard-host=0.0.0.0 --dashboard-port="${DASHBOARD_PORT:-8265}" --disable-usage-stats --num-cpus=32
 fi
 
 mkdir -p "rollout_data/$EXP_NAME/train" "rollout_data/$EXP_NAME/validation" logs
@@ -132,7 +132,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.val_before_train=True \
     trainer.resume_mode="auto" \
-    trainer.logger="${TRAINER_LOGGER:-['console']}" \
+    trainer.logger="${TRAINER_LOGGER:-['console', 'tensorboard']}" \
     trainer.project_name='wsi_nav_rl' \
     trainer.experiment_name="$EXP_NAME" \
     trainer.n_gpus_per_node="$N_GPUS_PER_NODE" \
