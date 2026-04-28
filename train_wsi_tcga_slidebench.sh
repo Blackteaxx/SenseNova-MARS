@@ -5,6 +5,14 @@ set -ex
 
 cd "$(dirname "$0")"
 
+# =======================================================================
+# Set conda gcc 12
+export CC="$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-gcc"
+export CXX="$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-g++"
+export CUDAHOSTCXX="$CXX"
+# =======================================================================
+
+
 MODEL_PATH=${MODEL_PATH:-Qwen/Qwen3-VL-8B-Instruct}
 TRAIN_FILES=${TRAIN_FILES:-"$(pwd)/train_wsi_tcga_slidebench.json"}
 VAL_FILES=${VAL_FILES:-"$(pwd)/test_wsi_tcga_slidebench.json"}

@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_CSV_PATH = Path(
     "/mnt/dolphinfs/ssd_pool/docker/user/hadoop-nlp-sh02/native_mm/zhangquan/code/hutu/"
     "WSI-Nav/gigapixel-goblin/data/multipathqa/MultiPathQA.csv"
@@ -24,22 +23,33 @@ DEFAULT_OUTPUT_ROOT = Path("data/wsi_tcga_slidebench")
 
 OPTION_LABELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-SYSTEM_PROMPT = """# Role
-你是一个用于病理全切片图像问答的逐步推理助手。
+SYSTEM_PROMPT = """You are a research assistant specializing in pathology whole-slide images.
 
-你会先观察整张 WSI 的缩略图；如果需要查看细节，可以调用工具裁剪局部区域。每一轮你必须二选一：
-1. 在 <tool_call>...</tool_call> 中发起一次具体工具调用；
-2. 或在 <answer>...</answer> 中给出最终选项字母。
+Your job is to answer questions about pathology slides by looking at the current image closely and then using research tools when needed. Follow a structured thinking process and show your work, but keep the visible reasoning concrete, and grounded in the actual image.
 
-输出格式必须严格遵守：
+Start an iterative loop for each question:
 
-继续观察时：
-<thinking>用简短中文说明当前判断和下一步要看的区域。</thinking>
-<tool_call>{"name":"wsi_zoom_in_tool","arguments":{"bbox_2d":[x1,y1,x2,y2],"label":"区域说明"}}</tool_call>
+- First, look closely: Begin with a careful description of the current image, paying attention to the user's question. State what you can tell directly from the image, what remains uncertain, and what additional visual evidence you need.
+- Next, investigate with tools: Use the available tools to inspect a more informative region or gather the visual evidence you still need.
+- Then, review the findings: Carefully analyze the returned crop or tool result and decide on your next action.
 
-准备回答时：
-<thinking>用简短中文总结证据。</thinking>
-<answer>选项字母</answer>
+Continue this loop until your visual investigation is complete.
+
+WSI navigation rules:
+
+- The first image is the global thumbnail of the whole slide.
+- Later images are the most recent crop returned by tools.
+- All crop boxes use the shared global-relative 0..1000 coordinate system.
+- Coordinates must be integers in the form x1, y1, x2, y2.
+- Prefer focused, information-dense regions instead of repeatedly zooming very large empty areas.
+
+Answer rules:
+
+- When evidence is insufficient, continue navigation.
+- When evidence is sufficient, bring everything together into a clear synthesized answer.
+- Output exactly one <answer>...</answer> block.
+- Put the final answer inside the tag and do not add extra wrapper text outside it.
+
 """
 
 
@@ -75,7 +85,9 @@ def sort_key(row: dict[str, str]) -> tuple[int, int | str]:
 
 
 def build_prompt(question: str, options: list[str]) -> str:
-    option_lines = "\n".join(f"{OPTION_LABELS[idx]}. {option}" for idx, option in enumerate(options))
+    option_lines = "\n".join(
+        f"{OPTION_LABELS[idx]}. {option}" for idx, option in enumerate(options)
+    )
     return (
         "<image>\n"
         f"Question: {question}\n\n"
@@ -93,7 +105,9 @@ def normalize_answer_to_letter(raw_answer: str) -> str:
     try:
         option_idx = int(answer)
     except ValueError as exc:
-        raise ValueError(f"answer must be a 1-based option number or letter, got {raw_answer!r}") from exc
+        raise ValueError(
+            f"answer must be a 1-based option number or letter, got {raw_answer!r}"
+        ) from exc
     if option_idx < 1 or option_idx > len(OPTION_LABELS):
         raise ValueError(f"answer option index out of range: {option_idx}")
     return OPTION_LABELS[option_idx - 1]
@@ -137,7 +151,8 @@ def load_tcga_slidebench_rows(csv_path: Path) -> list[dict[str, str]]:
     rows = [
         row
         for row in rows
-        if row.get("benchmark_name") == "tcga_slidebench" and truthy(row.get("is_valid", ""))
+        if row.get("benchmark_name") == "tcga_slidebench"
+        and truthy(row.get("is_valid", ""))
     ]
     return sorted(rows, key=sort_key)
 
@@ -172,7 +187,11 @@ def manifest_entry(split: str, output_root: Path, count: int) -> dict[str, Any]:
 
 def write_manifest(path: Path, split: str, output_root: Path, count: int) -> None:
     path.write_text(
-        json.dumps({f"wsi_tcga_slidebench_{split}": manifest_entry(split, output_root, count)}, ensure_ascii=False, indent=2)
+        json.dumps(
+            {f"wsi_tcga_slidebench_{split}": manifest_entry(split, output_root, count)},
+            ensure_ascii=False,
+            indent=2,
+        )
         + "\n"
     )
 
