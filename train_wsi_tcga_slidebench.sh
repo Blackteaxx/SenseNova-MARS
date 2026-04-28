@@ -112,12 +112,16 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.prompt_length="$MAX_PROMPT_LENGTH" \
     actor_rollout_ref.rollout.response_length="$MAX_RESPONSE_LENGTH" \
     actor_rollout_ref.rollout.n="$ROLLOUT_N" \
+    +actor_rollout_ref.rollout.repetition_penalty=1.0 \
+    +actor_rollout_ref.rollout.presence_penalty=0.0 \
     actor_rollout_ref.rollout.calculate_log_probs=True \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.7 \
     actor_rollout_ref.rollout.val_kwargs.top_p=0.8 \
     actor_rollout_ref.rollout.val_kwargs.top_k=20 \
     actor_rollout_ref.rollout.val_kwargs.do_sample=True \
+    +actor_rollout_ref.rollout.val_kwargs.repetition_penalty=1.0 \
+    +actor_rollout_ref.rollout.val_kwargs.presence_penalty=0.0 \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.ref.fsdp_config.param_offload=False \
     actor_rollout_ref.ref.fsdp_config.model_dtype=bfloat16 \

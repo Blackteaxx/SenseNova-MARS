@@ -16,12 +16,6 @@ top_k: -1
 # Top-p sampling parameter. Default 1.0.
 top_p: 1
 
-# Penalizes repeated tokens during rollout generation. 1.0 disables the penalty.
-repetition_penalty: 1.0
-
-# Penalizes tokens that have already appeared during rollout generation. 0.0 disables the penalty.
-presence_penalty: 0.0
-
 # typically the same as data max prompt length
 # same as data.max_prompt_length if it exists
 prompt_length: ${oc.select:data.max_prompt_length,512}
@@ -140,12 +134,6 @@ val_kwargs:
 
   # Sampling temperature for rollout.
   temperature: 0
-
-  # Penalizes repeated tokens during validation generation. 1.0 disables the penalty.
-  repetition_penalty: 1.0
-
-  # Penalizes tokens that have already appeared during validation generation. 0.0 disables the penalty.
-  presence_penalty: 0.0
 
   # whether to repeat n times for validation
   n: 1
