@@ -953,23 +953,6 @@ def extract_solution_for_mcq(solution_str):
     return None
 
 
-def extract_solution_for_numeric_mcq(solution_str: str):
-    """
-    Extract the first numeric option from the final <answer> tag.
-
-    This is for close-ended datasets whose ground truth is a 1-based option
-    number, e.g. MultiPathQA/SlideBench rows with answer="3".
-    """
-    answer = extract_solution(solution_str=solution_str)
-    if answer is None:
-        return None
-
-    match = re.search(r"\d+", answer)
-    if match is None:
-        return None
-    return match.group(0)
-
-
 def compute_score_em_for_mcq(solution_str, ground_truth, method='strict', format_score=0., score=1., **kwargs):
     """
     Exact Match scoring for multiple choice questions.
@@ -1006,51 +989,6 @@ def compute_score_em_for_mcq(solution_str, ground_truth, method='strict', format
             "",
             "=" * 80,
             "EM SCORE (MCQ)",
-            "=" * 80,
-            f"Answer extracted: {answer is not None}",
-            f"EM match: {em_match}",
-            f"Golden answers: {ground_truth}",
-            f"Extracted answer: {answer}",
-            f"Solution string: {solution_str}",
-            f"Score: {score}",
-            "=" * 80,
-            ""
-        ])
-        print(log_msg, flush=True)
-
-    return score
-
-
-def compute_score_numeric_mcq(solution_str, ground_truth, method='strict', format_score=0., score=1., **kwargs):
-    """
-    Exact Match scoring for numeric multiple choice questions.
-
-    Extracts the first integer from the final <answer>...</answer> tag and
-    compares it to the ground truth option number.
-    """
-    if solution_str is None:
-        solution_str = ""
-    solution_str = solution_str.rsplit("<|im_start|>assistant", 1)[-1]
-    solution_str = re.split(r'</think(?:ing)?>', solution_str)[-1]
-    answer = extract_solution_for_numeric_mcq(solution_str=solution_str)
-    do_print = random.randint(1, 64) == 1
-
-    if answer is None:
-        score = 0
-        em_match = False
-    else:
-        if em_check(answer, str(ground_truth)):
-            score = 1
-            em_match = True
-        else:
-            score = 0
-            em_match = False
-
-    if do_print:
-        log_msg = "\n".join([
-            "",
-            "=" * 80,
-            "EM SCORE (NUMERIC MCQ)",
             "=" * 80,
             f"Answer extracted: {answer is not None}",
             f"EM match: {em_match}",
@@ -1383,6 +1321,5 @@ compute_score_fns = {
     "llm_score_allow_no_answer_tag": compute_score_llm_allow_no_answer_tag,
     "em_score": compute_score_em,
     "em_score_mcq": compute_score_em_for_mcq,
-    "em_score_numeric_mcq": compute_score_numeric_mcq,
     "format_score": compute_format_score,
 }

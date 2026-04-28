@@ -43,6 +43,14 @@ def test_parse_options_accepts_python_literal_and_json():
     assert module.parse_options('["A", "B"]') == ["A", "B"]
 
 
+def test_normalize_answer_to_letter_accepts_number_and_letter():
+    module = _load_module()
+
+    assert module.normalize_answer_to_letter("1") == "A"
+    assert module.normalize_answer_to_letter("3") == "C"
+    assert module.normalize_answer_to_letter("d") == "D"
+
+
 def test_convert_writes_stable_train_and_val_jsonl(tmp_path):
     module = _load_module()
     csv_path = tmp_path / "MultiPathQA.csv"
@@ -106,13 +114,15 @@ def test_convert_writes_stable_train_and_val_jsonl(tmp_path):
 
     assert train_rows[0]["extra_info"]["benchmark_id"] == "1"
     assert val_rows[0]["extra_info"]["benchmark_id"] == "2"
-    assert train_rows[0]["reward_model"]["ground_truth"] == "2"
+    assert train_rows[0]["reward_model"]["ground_truth"] == "B"
     assert train_rows[0]["multi_modal_data"]["wsi"] == {
         "file_id": "file-a",
         "image_path": "slide-a.svs",
         "series_dir": str(dicom_root / "wsi" / "file-a"),
     }
+    assert "A. C" in train_rows[0]["prompt"][0]["content"]
+    assert "B. D" in train_rows[0]["prompt"][0]["content"]
     assert "<answer>...</answer>" in train_rows[0]["prompt"][0]["content"]
     assert train_meta["wsi_tcga_slidebench_train"]["length"] == 1
     assert val_meta["wsi_tcga_slidebench_val"]["length"] == 1
-    assert train_meta["wsi_tcga_slidebench_train"]["reward_fn"] == ["em_score_numeric_mcq", "format_score"]
+    assert train_meta["wsi_tcga_slidebench_train"]["reward_fn"] == ["em_score_mcq", "format_score"]

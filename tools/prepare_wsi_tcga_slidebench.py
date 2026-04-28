@@ -22,12 +22,14 @@ DEFAULT_DICOM_ROOT = Path(
 )
 DEFAULT_OUTPUT_ROOT = Path("data/wsi_tcga_slidebench")
 
+OPTION_LABELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
 SYSTEM_PROMPT = """# Role
 你是一个用于病理全切片图像问答的逐步推理助手。
 
 你会先观察整张 WSI 的缩略图；如果需要查看细节，可以调用工具裁剪局部区域。每一轮你必须二选一：
 1. 在 <tool_call>...</tool_call> 中发起一次具体工具调用；
-2. 或在 <answer>...</answer> 中给出最终选项编号。
+2. 或在 <answer>...</answer> 中给出最终选项字母。
 
 输出格式必须严格遵守：
 
@@ -37,7 +39,7 @@ SYSTEM_PROMPT = """# Role
 
 准备回答时：
 <thinking>用简短中文总结证据。</thinking>
-<answer>选项编号</answer>
+<answer>选项字母</answer>
 """
 
 
@@ -73,15 +75,28 @@ def sort_key(row: dict[str, str]) -> tuple[int, int | str]:
 
 
 def build_prompt(question: str, options: list[str]) -> str:
-    option_lines = "\n".join(f"{idx}. {option}" for idx, option in enumerate(options, start=1))
+    option_lines = "\n".join(f"{OPTION_LABELS[idx]}. {option}" for idx, option in enumerate(options))
     return (
         "<image>\n"
         f"Question: {question}\n\n"
         "Options:\n"
         f"{option_lines}\n\n"
         "You may inspect the whole-slide thumbnail and call tools when needed.\n"
-        "When ready, return only the final option number in <answer>...</answer>."
+        "When ready, return only the final option letter in <answer>...</answer>."
     )
+
+
+def normalize_answer_to_letter(raw_answer: str) -> str:
+    answer = str(raw_answer).strip()
+    if len(answer) == 1 and answer.upper() in OPTION_LABELS:
+        return answer.upper()
+    try:
+        option_idx = int(answer)
+    except ValueError as exc:
+        raise ValueError(f"answer must be a 1-based option number or letter, got {raw_answer!r}") from exc
+    if option_idx < 1 or option_idx > len(OPTION_LABELS):
+        raise ValueError(f"answer option index out of range: {option_idx}")
+    return OPTION_LABELS[option_idx - 1]
 
 
 def build_sample(row: dict[str, str], dicom_root: Path) -> dict[str, Any]:
@@ -98,7 +113,7 @@ def build_sample(row: dict[str, str], dicom_root: Path) -> dict[str, Any]:
             }
         ],
         "reward_model": {
-            "ground_truth": str(row["answer"]).strip(),
+            "ground_truth": normalize_answer_to_letter(row["answer"]),
         },
         "multi_modal_data": {
             "wsi": {
@@ -141,7 +156,7 @@ def manifest_entry(split: str, output_root: Path, count: int) -> dict[str, Any]:
         "annotation": str(root / "data.jsonl"),
         "length": count,
         "repeat_time": 1,
-        "reward_fn": ["em_score_numeric_mcq", "format_score"],
+        "reward_fn": ["em_score_mcq", "format_score"],
         "unused_reward_fn": [],
         "input_template": {
             "name": "general",
