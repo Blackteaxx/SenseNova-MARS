@@ -1,0 +1,28 @@
+# WSI DICOM tool configuration for training.
+
+tools:
+  - class_name: verl.tools.wsi_zoom_in_tool.WSIZoomInTool
+    config:
+      type: native
+      relative_coord_max: 1000.0
+      crop_long_side: 1024
+    tool_schema:
+      type: function
+      function:
+        name: wsi_zoom_in_tool
+        description: "在病理全切片图像中放大查看一个局部区域。坐标使用整张缩略图上的全局相对坐标，范围为 0 到 1000。"
+        parameters:
+          type: object
+          properties:
+            bbox_2d:
+              type: array
+              items:
+                type: number
+              minItems: 4
+              maxItems: 4
+              description: "需要放大的区域框，格式为 [x1, y1, x2, y2]。左上角是 (x1, y1)，右下角是 (x2, y2)，所有数值都在 0 到 1000 之间。"
+            label:
+              type: string
+              description: "用简短中文描述你想查看的区域或病理结构，例如 肿瘤边缘、腺体区域、坏死区域。"
+          required:
+            - bbox_2d
